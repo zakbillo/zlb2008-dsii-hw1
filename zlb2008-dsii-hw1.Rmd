@@ -1,0 +1,63 @@
+---
+title: "HW1"
+author: "Zakari L. Billo"
+date: "2026-02-25"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(caret)
+library(tidymodels)
+library(tidyverse)
+library(glmnet)
+
+knitr::opts_chunk$set(
+  fig.width = 8,
+  fig.height = 7,
+  fig.align = "center",
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+(a) Fit a lasso model on the training data. Report the selected tuning parameter and
+the test error. When the 1SE rule is applied, how many predictors are included in
+the model?
+
+(b) Fit an elastic net model on the training data. Report the selected tuning parameters
+and the test error. Is it possible to apply the 1SE rule to select the tuning parameters
+for elastic net? If the 1SE rule is applicable, implement it to select the tuning
+parameters. If not, explain why.
+
+(c) Fit a partial least squares model on the training data and report the test error. How
+many components are included in your model?
+
+(d) Choose the best model for predicting the response and explain your choice.
+
+(e) If R package “caret” was used for the lasso in (a), retrain this model using R package
+“glmnet”, and vice versa. Compare the selected tuning parameters between the two
+software approaches. Should there be discrepancies in the chosen parameters, discuss
+potential reasons for these differences.
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

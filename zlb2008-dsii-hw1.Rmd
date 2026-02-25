@@ -83,12 +83,12 @@ corrplot(cor(x), method = "circle", tl.cex = 0.75, type = "full",
 set.seed(2)
 cv.lasso <- cv.glmnet(x, y, 
                       alpha = 1, # alpha = 1 enforces the necessary L1 penalty for Lasso
-                      lambda = exp(seq(6, -5, length = 100)))
+                      lambda = exp(seq(10, -2, length = 100)))
 
 mat.coef <- coef(cv.lasso)
 
-cv.lasso$lambda.min # we know the min lambda (L1 penalty) is 48.85657
-cv.lasso$lambda.1se # we know lambda (L1 penalty) with the 1se rule is 403.4288
+cv.lasso$lambda.min # we know the min lambda (L1 penalty) is 45.52137
+cv.lasso$lambda.1se # we know lambda (L1 penalty) with the 1se rule is 942.4519
 ```
 
 Plot of cross-validated $\lambda$
@@ -98,7 +98,7 @@ plot(cv.lasso)
 abline(h = (cv.lasso$cvm + cv.lasso$cvsd)[which.min(cv.lasso$cvm)], col = 2, lwd = 2)
 ```
 
-The lambda.min (L1 penalty) is 48.85657 and lambda.1se (L1 penalty) is 403.4288.
+The lambda.min (L1 penalty) is 45.52137 and lambda.1se (L1 penalty) is 942.4519.
 
 Now we examine the trace plots
 
@@ -111,7 +111,7 @@ Let's check how many coefficients end up in the final CV training model when we 
 ```{r}
 predict(cv.lasso, s = cv.lasso$lambda.min, type = "coefficients") # 37/39 predictors are in the model
 
-predict(cv.lasso, s = cv.lasso$lambda.1se, type = "coefficients") # 35/39 predictors are in the model
+predict(cv.lasso, s = cv.lasso$lambda.1se, type = "coefficients") # 28/39 predictors are in the model
 ```
 
 We'll go with the 1se rule, since it gives the most regularized model such that error is within one standard
@@ -126,10 +126,10 @@ preds_1se <- predict(cv.lasso,
 # Calculate Test MSE
 test_error <- mean((housing_test$sale_price - preds_1se)^2)
 
-test_error # Test MSE is 435619339
+test_error # Test MSE is 437332020
 ```
 
-The selected tuning parameter ($\lambda$) is 403.43. Using this $\lambda$, the model includes 35 predictors and results in a Test Mean Squared Error (MSE) of 435,619,339 (which corresponds to an average error of roughly $20,871 per house, the RMSE).
+The selected tuning parameter ($\lambda$) is 942.4519. Using this $\lambda$, the model includes 28 predictors and results in a Test Mean Squared Error (MSE) of 437,332,020 (which corresponds to an average error of roughly $20,912 per house, the RMSE).
 
 **(b) Fit an elastic net model on the training data. Report the selected tuning parameters and the test error. Is it possible to apply the 1SE rule to select the tuning parameters for elastic net? If the 1SE rule is applicable, implement it to select the tuning parameters. If not, explain why.**
 
@@ -142,13 +142,13 @@ ctrl1_1se <- trainControl(method = "cv", number = 10, selectionFunction = "oneSE
 enet.fit <- train(x, y, 
                   method = "glmnet",
                   tuneGrid = expand.grid(alpha = seq(0, 1, length = 21),
-                                         lambda = exp(seq(6, -5, length = 100))),
+                                         lambda = exp(seq(10, -5, length = 100))),
                   trControl = ctrl1_1se) # Allow 1SE optimal parameters
 
 enet.fit$bestTune 
 ```
 
-Elastic net has determined that our optimal hyperparameters are $\alpha = 0.0 \ \text{and} \ \lambda = 403.4288$. 
+Elastic net has determined that our optimal hyperparameters are $\alpha = 0.0 \ \text{and} \ \lambda = 8874.25$. 
 
 Let's look at a rainbow plot of the hyperparameters
 
@@ -174,7 +174,7 @@ preds <- predict(enet.fit, newdata = model.matrix(sale_price ~ ., housing_test)[
 test_error <- mean((housing_test$sale_price - preds)^2)
 test_error
 ```
-The selected tuning parameters are $\alpha = 0.65 \ \text{and} \ \lambda = 28.03162$. Using these parameters $\lambda$, the model includes 38 predictors and results in a Test Mean Squared Error (MSE) of 4450,353,00 (which corresponds to an average error of roughly \$21,096 per house, the RMSE). The 1SE rule is applicable because "caret" allows us to apply the 1SE rule across a 2D grid of $\alpha$ and $\lambda$, we just need to tell trainControl to use it by adding selectionFunction = "oneSE".
+The selected tuning parameters are $\alpha = 0 \ \text{and} \ \lambda = 8874.25$. Using these parameters $\lambda$, the model includes 38 predictors and results in a Test Mean Squared Error (MSE) of 450,345,913 (which corresponds to an average error of roughly \$21,221 per house, the RMSE). The 1SE rule is applicable because "caret" allows us to apply the 1SE rule across a 2D grid of $\alpha$ and $\lambda$, we just need to tell trainControl to use it by adding selectionFunction = "oneSE".
 
 **(c) Fit a partial least squares model on the training data and report the test error. How many components are included in your model?**
 
@@ -215,7 +215,7 @@ set.seed(2)
 lasso.fit <- train(sale_price ~ . ,data = housing_training, 
                    method = "glmnet", 
                    tuneGrid = expand.grid(alpha = 1, # Alpha = 1 corresponds to L1 penalty (Lasso)
-                   lambda = exp(seq(6, -5, length=100))),
+                   lambda = exp(seq(10, -5, length=100))),
 trControl = ctrl1)
 
 plot(lasso.fit, xTrans = log)
@@ -225,7 +225,7 @@ plot(lasso.fit, xTrans = log)
 lasso.fit$bestTune 
 ```
 
-The optimal $\lambda = 22.44597$ for $\alpha = 1$ (Lasso). Let's look at the Test MSE now
+The optimal $\lambda = 20.70351$ for $\alpha = 1$ (Lasso). Let's look at the Test MSE now
 
 ```{r}
 pred_caret <- predict(lasso.fit, newdata = housing_test)

@@ -6,10 +6,15 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
+library(ISLR)
+library(glmnet)
 library(caret)
 library(tidymodels)
+library(corrplot)
+library(ggplot2)
+library(plotmo)
+library(ggrepel)
 library(tidyverse)
-library(glmnet)
 
 knitr::opts_chunk$set(
   fig.width = 8,
@@ -29,35 +34,215 @@ scale_colour_discrete = scale_colour_viridis_d
 scale_fill_discrete = scale_fill_viridis_d
 ```
 
+In this exercise, we predict the sale price of a house based on various characteristics.
+
+# Data initialization
+
+```{r}
+housing_test <- read.csv("data/housing_test.csv",  na = c("NA", ".", "")) |>
+  janitor::clean_names() 
+
+housing_training <- read.csv("data/housing_training.csv",  na = c("NA", ".", "")) |>
+  janitor::clean_names()
+
+qual_levels <- c("No_Fireplace", "Poor", "Fair", "Typical", "Below_Average", 
+                 "Average", "Above_Average", "Good", "Very_Good", 
+                 "Excellent", "Very_Excellent")
+
+# Code variables correctly
+housing_training <- housing_training |>
+  mutate(across(c(overall_qual, kitchen_qual, fireplace_qu, exter_qual), 
+                ~ factor(.x, levels = intersect(qual_levels, unique(.x)))))
+
+housing_test <- housing_test |>
+  mutate(
+    overall_qual = factor(overall_qual, levels = levels(housing_training$overall_qual)),
+    kitchen_qual = factor(kitchen_qual, levels = levels(housing_training$kitchen_qual)),
+    fireplace_qu = factor(fireplace_qu, levels = levels(housing_training$fireplace_qu)),
+    exter_qual   = factor(exter_qual,   levels = levels(housing_training$exter_qual))
+  )
+
+housing_training <- housing_training |> drop_na()
+housing_test <- housing_test |> drop_na()
+
+# matrix of predictors (glmnet uses input matrix)
+x <- model.matrix(sale_price ~ ., housing_training)[,-1]
+# vector of response
+y <- housing_training[, "sale_price"]
+
+corrplot(cor(x), method = "circle", tl.cex = 0.75, type = "full", 
+         tl.col = "black",    
+         tl.srt = 45)
+```
+
+# Problems 
+
 (a) Fit a lasso model on the training data. Report the selected tuning parameter and
 the test error. When the 1SE rule is applied, how many predictors are included in
 the model?
+
+```{r}
+set.seed(2)
+cv.lasso <- cv.glmnet(x, y, 
+                      alpha = 1, # alpha = 1 enforces the necessary L1 penalty for Lasso
+                      lambda = exp(seq(6, -5, length = 100)))
+
+mat.coef <- coef(cv.lasso)
+
+cv.lasso$lambda.min # we know the min lambda (L1 penalty) is 48.85657
+cv.lasso$lambda.1se # we know lambda (L1 penalty) with the 1se rule is 403.4288
+```
+
+Plot of cross-validated $\lambda$
+
+```{r}
+plot(cv.lasso)
+abline(h = (cv.lasso$cvm + cv.lasso$cvsd)[which.min(cv.lasso$cvm)], col = 2, lwd = 2)
+```
+
+The lambda.min (L1 penalty) is 48.85657 and lambda.1se (L1 penalty) is 403.4288.
+
+Now we examine the trace plots
+
+```{r}
+plot_glmnet(cv.lasso$glmnet.fit)
+```
+
+Let's check how many coefficients end up in the final CV training model when we apply min CV lambda.min vs. CV lambda.1se 
+
+```{r}
+predict(cv.lasso, s = cv.lasso$lambda.min, type = "coefficients") # 37/39 predictors are in the model
+
+predict(cv.lasso, s = cv.lasso$lambda.1se, type = "coefficients") # 35/39 predictors are in the model
+```
+
+We'll go with the 1se rule, since it gives the most regularized model such that error is within one standard
+error of the minimum
+
+```{r}
+# Predictions for the test set
+preds_1se <- predict(cv.lasso, 
+                     newx = model.matrix(sale_price ~ ., housing_test)[,-1], 
+                     s = "lambda.1se")
+
+# Calculate Test MSE
+test_error <- mean((housing_test$sale_price - preds_1se)^2)
+
+test_error # Test MSE is 435619339
+```
+
+The selected tuning parameter ($\lambda$) is 403.43. Using this $\lambda$, the model includes 35 predictors and results in a Test Mean Squared Error (MSE) of 435,619,339 (which corresponds to an average error of roughly $20,871 per house, the RMSE).
 
 (b) Fit an elastic net model on the training data. Report the selected tuning parameters
 and the test error. Is it possible to apply the 1SE rule to select the tuning parameters
 for elastic net? If the 1SE rule is applicable, implement it to select the tuning
 parameters. If not, explain why.
 
+```{r}
+set.seed(2)
+
+ctrl1_1se <- trainControl(method = "cv", number = 10, selectionFunction = "oneSE") 
+
+# Train using x and y 
+enet.fit <- train(x, y, 
+                  method = "glmnet",
+                  tuneGrid = expand.grid(alpha = seq(0, 1, length = 21),
+                                         lambda = exp(seq(6, -5, length = 100))),
+                  trControl = ctrl1_1se) # Allow 1SE optimal parameters
+
+enet.fit$bestTune 
+```
+
+Elastic net has determined that our optimal hyperparameters are $\alpha = 0.0 \ \text{and} \ \lambda = 403.4288$. 
+
+Let's look at a rainbow plot of the hyperparameters
+
+```{r}
+myCol <- rainbow(25)
+myPar <- list(superpose.symbol = list(col = myCol),
+superpose.line = list(col = myCol))
+plot(enet.fit, par.settings = myPar, xTrans = log)
+```
+
+```{r}
+# Coefficients in the final model
+coef(enet.fit$finalModel, enet.fit$bestTune$lambda) # 39/39 coeffs remain
+```
+
+Find Test MSE
+
+```{r}
+preds <- predict(enet.fit$finalModel, 
+                     newx = model.matrix(sale_price ~ ., housing_test)[,-1], 
+                     s = enet.fit$bestTune$lambda)
+
+# Calculate Test MSE
+test_error <- mean((housing_test$sale_price - preds)^2)
+
+test_error # Test MSE is 445035300
+```
+The selected tuning parameters are $\alpha = 0.65 \ \text{and} \ \lambda = 28.03162$. Using these parameters $\lambda$, the model includes 38 predictors and results in a Test Mean Squared Error (MSE) of 4450,353,00 (which corresponds to an average error of roughly \$21,096 per house, the RMSE). The 1SE rule is applicable because "caret" allows us to apply the 1SE rule across a 2D grid of $\alpha$ and $\lambda$, we just need to tell trainControl to use it by adding selectionFunction = "oneSE".
+
 (c) Fit a partial least squares model on the training data and report the test error. How
 many components are included in your model?
 
+```{r}
+set.seed(2)
+pls_fit <- train(x, y,
+                 method = "pls",
+                 tuneGrid = data.frame(ncomp = 1:39),
+                 trControl = ctrl1,
+                 preProcess = c("center", "scale"))
+
+pls_fit # 23 components were selected
+```
+
+```{r}
+pred_pls <- predict(pls_fit, newdata = model.matrix(sale_price ~ ., housing_test)[,-1])
+
+test_error_pls <- mean((housing_test$sale_price - pred_pls)^2)
+
+test_error_pls # Test MSE is 447100921
+```
+Partial least squares regression selected 23 components in the model includes and results in a Test Mean Squared Error (MSE) of 447,100,921 (which corresponds to an average error of roughly $21,145 per house, the RMSE). 
+
 (d) Choose the best model for predicting the response and explain your choice.
+
+The best model (between Lasso, Elastic net, and PLS) was Lasso, as it had the lowest Test MSE of 435,619,339
 
 (e) If R package “caret” was used for the lasso in (a), retrain this model using R package
 “glmnet”, and vice versa. Compare the selected tuning parameters between the two
 software approaches. Should there be discrepancies in the chosen parameters, discuss
 potential reasons for these differences.
 
-```{r cars}
-summary(cars)
+I will retrain with "caret" instead of the previously used "glmnet"
+```{r}
+ctrl1 <- trainControl(method = "cv", number = 10)
+
+set.seed(2)
+
+lasso.fit <- train(sale_price ~ . ,data = housing_training, 
+                   method = "glmnet", 
+                   tuneGrid = expand.grid(alpha = 1, # Alpha = 1 corresponds to L1 penalty (Lasso)
+                   lambda = exp(seq(6, -5, length=100))),
+trControl = ctrl1)
+
+plot(lasso.fit, xTrans = log)
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+lasso.fit$bestTune 
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+The optimal $\lamda = 22.44597$ for $\alpha = 1$ (L1 penalty / Lasso). Let's look at the Test MSE now
+
+```{r}
+pred_caret <- predict(lasso.fit, newdata = housing_test)
+
+mse_caret <- mean((housing_test$sale_price - pred_caret)^2)
+
+mse_caret
+```
+
+Lasso with "caret" has a Test MSE of 446,277,782 (which corresponds to an average error of roughly $21,125 per house, the RMSE). 
+

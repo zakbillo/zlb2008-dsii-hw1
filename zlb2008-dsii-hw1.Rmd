@@ -77,9 +77,7 @@ corrplot(cor(x), method = "circle", tl.cex = 0.75, type = "full",
 
 # Problems 
 
-(a) Fit a lasso model on the training data. Report the selected tuning parameter and
-the test error. When the 1SE rule is applied, how many predictors are included in
-the model?
+**(a) Fit a lasso model on the training data. Report the selected tuning parameter and the test error. When the 1SE rule is applied, how many predictors are included in the  model?**
 
 ```{r}
 set.seed(2)
@@ -133,10 +131,7 @@ test_error # Test MSE is 435619339
 
 The selected tuning parameter ($\lambda$) is 403.43. Using this $\lambda$, the model includes 35 predictors and results in a Test Mean Squared Error (MSE) of 435,619,339 (which corresponds to an average error of roughly $20,871 per house, the RMSE).
 
-(b) Fit an elastic net model on the training data. Report the selected tuning parameters
-and the test error. Is it possible to apply the 1SE rule to select the tuning parameters
-for elastic net? If the 1SE rule is applicable, implement it to select the tuning
-parameters. If not, explain why.
+**(b) Fit an elastic net model on the training data. Report the selected tuning parameters and the test error. Is it possible to apply the 1SE rule to select the tuning parameters for elastic net? If the 1SE rule is applicable, implement it to select the tuning parameters. If not, explain why.**
 
 ```{r}
 set.seed(2)
@@ -172,21 +167,20 @@ coef(enet.fit$finalModel, enet.fit$bestTune$lambda) # 39/39 coeffs remain
 Find Test MSE
 
 ```{r}
-preds <- predict(enet.fit$finalModel, 
-                     newx = model.matrix(sale_price ~ ., housing_test)[,-1], 
-                     s = enet.fit$bestTune$lambda)
+# Calculate predictions the caret way
+preds <- predict(enet.fit, newdata = model.matrix(sale_price ~ ., housing_test)[,-1])
 
 # Calculate Test MSE
 test_error <- mean((housing_test$sale_price - preds)^2)
-
-test_error # Test MSE is 445035300
+test_error
 ```
 The selected tuning parameters are $\alpha = 0.65 \ \text{and} \ \lambda = 28.03162$. Using these parameters $\lambda$, the model includes 38 predictors and results in a Test Mean Squared Error (MSE) of 4450,353,00 (which corresponds to an average error of roughly \$21,096 per house, the RMSE). The 1SE rule is applicable because "caret" allows us to apply the 1SE rule across a 2D grid of $\alpha$ and $\lambda$, we just need to tell trainControl to use it by adding selectionFunction = "oneSE".
 
-(c) Fit a partial least squares model on the training data and report the test error. How
-many components are included in your model?
+**(c) Fit a partial least squares model on the training data and report the test error. How many components are included in your model?**
 
 ```{r}
+ctrl1 <- trainControl(method = "cv", number = 10)
+
 set.seed(2)
 pls_fit <- train(x, y,
                  method = "pls",
@@ -206,14 +200,11 @@ test_error_pls # Test MSE is 447100921
 ```
 Partial least squares regression selected 23 components in the model includes and results in a Test Mean Squared Error (MSE) of 447,100,921 (which corresponds to an average error of roughly $21,145 per house, the RMSE). 
 
-(d) Choose the best model for predicting the response and explain your choice.
+**(d) Choose the best model for predicting the response and explain your choice.**
 
 The best model (between Lasso, Elastic net, and PLS) was Lasso, as it had the lowest Test MSE of 435,619,339
 
-(e) If R package “caret” was used for the lasso in (a), retrain this model using R package
-“glmnet”, and vice versa. Compare the selected tuning parameters between the two
-software approaches. Should there be discrepancies in the chosen parameters, discuss
-potential reasons for these differences.
+**(e) If R package “caret” was used for the lasso in (a), retrain this model using R package “glmnet”, and vice versa. Compare the selected tuning parameters between the two software approaches. Should there be discrepancies in the chosen parameters, discuss potential reasons for these differences.**
 
 I will retrain with "caret" instead of the previously used "glmnet"
 ```{r}
@@ -234,7 +225,7 @@ plot(lasso.fit, xTrans = log)
 lasso.fit$bestTune 
 ```
 
-The optimal $\lamda = 22.44597$ for $\alpha = 1$ (L1 penalty / Lasso). Let's look at the Test MSE now
+The optimal $\lambda = 22.44597$ for $\alpha = 1$ (Lasso). Let's look at the Test MSE now
 
 ```{r}
 pred_caret <- predict(lasso.fit, newdata = housing_test)
@@ -244,5 +235,4 @@ mse_caret <- mean((housing_test$sale_price - pred_caret)^2)
 mse_caret
 ```
 
-Lasso with "caret" has a Test MSE of 446,277,782 (which corresponds to an average error of roughly $21,125 per house, the RMSE). 
-
+Lasso with "caret" has a Test MSE of 446,277,782 (which corresponds to an average error of roughly \$21,125 per house, the RMSE). This is MSE is larger than what resulted from the Lasso procedure with "glmnet". As noted in class, if a lambda sequence is not explicitly specified, glmnet and caret will use completely different default grids. Specifically, caret's implementation does specify lambda, meaning the default grid of lambda is different from the assigned lambda.grid. I explicitly passed the same lambda sequence to both functions to minimize this discrepancy. Also, when setting the same random seed (set.seed(2)) and forcing the exact same lambda grid, caret and glmnet use different internal algorithms to implement the random partition of the data into 10 folds. Because the observations inside each fold differ between the two packages, the Mean Squared Error calculated for each $\lambda$ varies.

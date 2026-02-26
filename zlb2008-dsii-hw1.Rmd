@@ -202,13 +202,14 @@ Partial least squares regression selected 23 components in the model includes an
 
 **(d) Choose the best model for predicting the response and explain your choice.**
 
-The best model (between Lasso, Elastic net, and PLS) was Lasso, as it had the lowest Test MSE of 435,619,339
+The best model (between Lasso, Elastic net, and PLS) was Lasso, as it had the lowest Test MSE of 437,332,020.
 
 **(e) If R package “caret” was used for the lasso in (a), retrain this model using R package “glmnet”, and vice versa. Compare the selected tuning parameters between the two software approaches. Should there be discrepancies in the chosen parameters, discuss potential reasons for these differences.**
 
 I will retrain with "caret" instead of the previously used "glmnet"
 ```{r}
-ctrl1 <- trainControl(method = "cv", number = 10)
+ctrl1 <- trainControl(method = "cv", number = 10,
+                      selectionFunction = "oneSE")
 
 set.seed(2)
 
@@ -225,7 +226,7 @@ plot(lasso.fit, xTrans = log)
 lasso.fit$bestTune 
 ```
 
-The optimal $\lambda = 20.70351$ for $\alpha = 1$ (Lasso). Let's look at the Test MSE now
+The optimal $\lambda = 914.3211$ for $\alpha = 1$ (Lasso). Let's look at the Test MSE now
 
 ```{r}
 pred_caret <- predict(lasso.fit, newdata = housing_test)
@@ -235,4 +236,4 @@ mse_caret <- mean((housing_test$sale_price - pred_caret)^2)
 mse_caret
 ```
 
-Lasso with "caret" has a Test MSE of 446,277,782 (which corresponds to an average error of roughly \$21,125 per house, the RMSE). This is MSE is larger than what resulted from the Lasso procedure with "glmnet". As noted in class, if a lambda sequence is not explicitly specified, glmnet and caret will use completely different default grids. Specifically, caret's implementation does specify lambda, meaning the default grid of lambda is different from the assigned lambda.grid. I explicitly passed the same lambda sequence to both functions to minimize this discrepancy. Also, when setting the same random seed (set.seed(2)) and forcing the exact same lambda grid, caret and glmnet use different internal algorithms to implement the random partition of the data into 10 folds. Because the observations inside each fold differ between the two packages, the Mean Squared Error calculated for each $\lambda$ varies.
+Lasso with "caret" has a Test MSE of 436,922,925 (which corresponds to an average error of roughly \$20,903 per house, the RMSE). This is MSE is slightly lower than what resulted from the Lasso procedure with "glmnet". As noted in class, if a lambda sequence is not explicitly specified, glmnet and caret will use completely different default grids. Specifically, caret's implementation does specify lambda, meaning the default grid of lambda is different from the assigned lambda.grid. I explicitly passed the same lambda sequence to both functions to minimize this discrepancy. Also, when setting the same random seed (set.seed(2)) and forcing the exact same lambda grid, caret and glmnet use different internal algorithms to implement the random partition of the data into 10 folds. Because the observations inside each fold differ between the two packages, the Mean Squared Error calculated for each $\lambda$ varies. 
